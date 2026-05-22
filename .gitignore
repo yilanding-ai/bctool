@@ -11,6 +11,7 @@ test_results/
 *.fq
 *.bam
 *.sam
+benchmarks/*.json
 
 # OS
 .DS_Store

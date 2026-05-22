@@ -214,7 +214,7 @@ class Pipeline:
 
         # Fall back to mock aligners if no real tools available
         if not real_aligners:
-            print("  No external tools available â€?using built-in mock aligners for demonstration.")
+            print("  No external tools available - using built-in mock aligners for demonstration.")
             from .aligners.mock import MockAlignerFactory
             mocks = MockAlignerFactory.create_mocks(self.config, self.work_dir)
             for mock in mocks:

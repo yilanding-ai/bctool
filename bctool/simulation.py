@@ -80,7 +80,7 @@ class Simulator:
 
         genome_path = out / "reference.fa"
         with open(genome_path, "w") as f:
-            f.write(">simulated_reference\n")
+            f.write(">chr_sim\n")
             for i in range(0, len(genome), 80):
                 f.write(genome[i:i+80] + "\n")
 

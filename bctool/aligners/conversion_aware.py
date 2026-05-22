@@ -7,20 +7,21 @@ from ..methylation.converter import ConversionType
 
 _ENCODE_2BIT = {"A": 0b00, "C": 0b01, "G": 0b10, "T": 0b11, "N": 0b00}
 _DECODE_2BIT = {0b00: "A", 0b01: "C", 0b10: "G", 0b11: "T"}
+_BASE2INT = {"A": 0, "C": 1, "G": 2, "T": 3}
 
 _CONV3_MAP_WIDE = {
-    "C>T": {"A": 0, "C": 1, "G": 0, "T": 1},
-    "T>C": {"A": 0, "C": 1, "G": 0, "T": 1},
-    "A>G": {"A": 0, "C": 1, "G": 0, "T": 1},
-    "G>A": {"A": 0, "C": 1, "G": 0, "T": 1},
-    "A>C": {"A": 0, "C": 0, "G": 1, "T": 1},
-    "C>A": {"A": 0, "C": 0, "G": 1, "T": 1},
-    "G>T": {"A": 1, "C": 1, "G": 0, "T": 0},
-    "T>G": {"A": 1, "C": 1, "G": 0, "T": 0},
-    "A>T": {"A": 0, "C": 1, "G": 2, "T": 0},
-    "T>A": {"A": 0, "C": 1, "G": 2, "T": 0},
-    "C>G": {"A": 1, "C": 0, "G": 0, "T": 2},
-    "G>C": {"A": 1, "C": 0, "G": 0, "T": 2},
+    "C>T": {"A": 0, "C": 1, "G": 2, "T": 1},
+    "T>C": {"A": 0, "C": 1, "G": 2, "T": 1},
+    "A>G": {"A": 1, "C": 0, "G": 1, "T": 2},
+    "G>A": {"A": 1, "C": 0, "G": 1, "T": 2},
+    "A>C": {"A": 1, "C": 1, "G": 0, "T": 2},
+    "C>A": {"A": 1, "C": 1, "G": 0, "T": 2},
+    "G>T": {"A": 2, "C": 0, "G": 1, "T": 1},
+    "T>G": {"A": 2, "C": 0, "G": 1, "T": 1},
+    "A>T": {"A": 1, "C": 0, "G": 2, "T": 1},
+    "T>A": {"A": 1, "C": 0, "G": 2, "T": 1},
+    "C>G": {"A": 0, "C": 1, "G": 1, "T": 2},
+    "G>C": {"A": 0, "C": 1, "G": 1, "T": 2},
 }
 
 
@@ -125,7 +126,7 @@ class ConversionAwareAligner(AlignerBase):
     def __init__(self, config, output_dir, name_suffix="", seed_length=16,
                  min_seed_matches=2, match_score=1, conversion_score=0,
                  mismatch_penalty=-1, gap_open=-4, gap_extend=-1,
-                 band_width_ratio=2.0, max_candidates=10):
+                 band_width_ratio=2.0, max_candidates=10, auto_adapt=True):
         super().__init__(config, output_dir)
         ConversionAwareAligner._instances += 1
         if name_suffix:
@@ -135,6 +136,7 @@ class ConversionAwareAligner(AlignerBase):
         self.aligner_dir = self.output_dir / self.name
         self.aligner_dir.mkdir(parents=True, exist_ok=True)
         self._seed_length = seed_length
+        self._auto_adapt = auto_adapt
         self.min_seed_matches = min_seed_matches
         self.match_score = match_score
         self.conversion_score = conversion_score
@@ -148,6 +150,19 @@ class ConversionAwareAligner(AlignerBase):
         self._ref_name = "chr_sim"
         self._conv_idx = {}
         self._ref_2bit = None
+
+    @staticmethod
+    def _optimal_seed_length(read_length):
+        if read_length < 40:
+            return 8
+        elif read_length < 60:
+            return 10
+        elif read_length < 80:
+            return 12
+        elif read_length < 120:
+            return 14
+        else:
+            return 16
 
     def is_available(self):
         return True
@@ -177,6 +192,16 @@ class ConversionAwareAligner(AlignerBase):
         if current_name and current_seq:
             seqs[current_name] = "".join(current_seq)
         return seqs
+
+    @staticmethod
+    def _detect_read_length(read1):
+        try:
+            with open(read1) as f:
+                for _ in range(2):
+                    line = f.readline()
+                return len(f.readline().strip())
+        except Exception:
+            return 100
 
     def build_index(self, reference_fa):
         ref_path = Path(reference_fa)
@@ -222,6 +247,9 @@ class ConversionAwareAligner(AlignerBase):
 
     def run_align(self, read1, read2=None, reference_fa=None, index_dir=None, threads=8):
         if self._genome is None and reference_fa:
+            if self._auto_adapt:
+                read_len = self._detect_read_length(read1)
+                self._seed_length = self._optimal_seed_length(read_len)
             self.build_index(reference_fa)
         if self._genome is None:
             print(f"  [{self.name}] No genome loaded, creating empty SAM")
@@ -251,6 +279,13 @@ class ConversionAwareAligner(AlignerBase):
         gap_open = self.gap_open
         gap_extend = self.gap_extend
         k = self._seed_length
+        # Read-adaptive tuning
+        if read_length < 100:
+            seed_step = max(1, read_length // 10)
+            local_max_candidates = min(self.max_candidates, 5)
+        else:
+            seed_step = max(1, k // 2)
+            local_max_candidates = self.max_candidates
         with open(out_sam, "w") as f:
             f.write(f"@HD\tVN:1.6\tSO:coordinate\n")
             f.write(f"@SQ\tSN:{self._ref_name}\tLN:{self._genome_len}\n")
@@ -268,7 +303,8 @@ class ConversionAwareAligner(AlignerBase):
                 else:
                     read_seq2 = None
                 result = self._align_single(read_seq, conv_key, hash_table,
-                                            ref_3base, k, band_width, gap_open, gap_extend)
+                                            ref_3base, k, band_width, gap_open, gap_extend,
+                                            seed_step, local_max_candidates)
                 if result:
                     ref_start, cigar_str, score, nm = result
                     flag = 0 if not is_paired else 99
@@ -279,7 +315,8 @@ class ConversionAwareAligner(AlignerBase):
                     if is_paired and read_seq2:
                         r2_result = self._align_single(read_seq2, conv_key,
                                                        hash_table, ref_3base,
-                                                       k, band_width, gap_open, gap_extend)
+                                                       k, band_width, gap_open, gap_extend,
+                                                       seed_step, local_max_candidates)
                         if r2_result:
                             r2_start, r2_cigar, r2_score, r2_nm = r2_result
                             r2_flag = 147
@@ -294,15 +331,19 @@ class ConversionAwareAligner(AlignerBase):
             print(f"  [{self.name}] Aligned {n_reads}/{n_reads} reads.")
 
     def _align_single(self, read_seq, conv_key, hash_table, ref_3base,
-                      k, band_width, gap_open, gap_extend):
+                      k, band_width, gap_open, gap_extend,
+                      seed_step=None, max_candidates=None):
         L = len(read_seq)
         if L < k:
             return None
         read_3base = to_3base(read_seq, conv_key)
         read_2bit = encode_2bit(read_seq)
         candidates = defaultdict(list)
-        step = max(1, k // 2)
-        for seed_start in range(0, L - k + 1, step):
+        if seed_step is None:
+            seed_step = max(1, k // 2)
+        if max_candidates is None:
+            max_candidates = self.max_candidates
+        for seed_start in range(0, L - k + 1, seed_step):
             seed = read_3base[seed_start:seed_start + k]
             shash = 0
             for val in seed:
@@ -317,7 +358,7 @@ class ConversionAwareAligner(AlignerBase):
         best_nm = L
         sorted_candidates = sorted(candidates.items(),
                                    key=lambda x: len(x[1]), reverse=True)
-        for offset, hits in sorted_candidates[:self.max_candidates]:
+        for offset, hits in sorted_candidates[:max_candidates]:
             n_seeds = len(set(h[0] for h in hits))
             if n_seeds < self.min_seed_matches:
                 continue
@@ -351,18 +392,17 @@ class ConversionAwareAligner(AlignerBase):
         M = np.zeros((L + 1, R + 1), dtype=np.int32)
         Ix = np.full((L + 1, R + 1), -10**9, dtype=np.int32)
         Iy = np.full((L + 1, R + 1), -10**9, dtype=np.int32)
+        ri_arr = np.array([_BASE2INT.get(b.upper(), 0) for b in read_seq], dtype=np.int32)
+        rj_arr = np.array([_BASE2INT.get(b.upper(), 0) for b in ref_region], dtype=np.int32)
         max_score = 0
         for i in range(1, L + 1):
-            ri = "ACGT".index(read_seq[i - 1]) if read_seq[i - 1].upper() in "ACGT" else 0
-            for j in range(1, R + 1):
-                rj = "ACGT".index(ref_region[j - 1]) if ref_region[j - 1].upper() in "ACGT" else 0
-                s = int(lut[rj, ri])
-                diag = max(M[i - 1, j - 1], Ix[i - 1, j - 1], Iy[i - 1, j - 1])
-                M[i, j] = max(0, diag + s)
-                Ix[i, j] = max(M[i, j - 1] + gap_open, Ix[i, j - 1] + gap_extend)
-                Iy[i, j] = max(M[i - 1, j] + gap_open, Iy[i - 1, j] + gap_extend)
-                if M[i, j] > max_score:
-                    max_score = M[i, j]
+            ri = int(ri_arr[i - 1])
+            s_col = lut[rj_arr, ri]
+            diag = np.maximum(M[i - 1, :-1], np.maximum(Ix[i - 1, :-1], Iy[i - 1, :-1]))
+            M[i, 1:] = np.maximum(0, diag + s_col)
+            Ix[i, 1:] = np.maximum(M[i, :-1] + gap_open, Ix[i, :-1] + gap_extend)
+            Iy[i, 1:] = np.maximum(M[i - 1, 1:] + gap_open, Iy[i - 1, 1:] + gap_extend)
+            max_score = max(max_score, int(np.max(M[i])))
         return max_score
 
     def call_methylation(self, sam_bam_path, reference_fa=None):
