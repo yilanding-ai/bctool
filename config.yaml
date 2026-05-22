@@ -1,0 +1,137 @@
+# BCTool - Bisulfite Conversion Alignment & Benchmarking Toolkit
+# Conversion type: ct, tc, ag, ga, ac, ca, gt, tg, at, ta, cg, gc
+conversion: ct
+
+# Sequencing mode: se (single-end) or pe (paired-end)
+mode: pe
+
+# Input files
+input:
+  read1: null
+  read2: null
+  reference: null
+
+# Output directory
+output_dir: "./bctool_results"
+
+# Read extraction settings
+extraction:
+  enabled: true
+  num_reads: 100000
+  sample_pct: null      # Percentage of reads (alternative to num_reads)
+  seed: 42
+
+# Simulation settings (used when no reference provided)
+simulation:
+  genome_length: 1000000
+  num_reads: 50000
+  read_length: 100
+  fragment_mean: 300
+  fragment_sd: 50
+  methylation_rate: 0.7
+  error_rate: 0.01
+  conversion_rate: 0.99
+
+# Aligner settings
+aligners:
+  enabled:
+    - bwameth
+    - bsbolt
+    - bsmap
+    - walt
+    - abismal
+    - batmeth2
+    - basal
+    - hisat3n
+    - hisat3n_repeat
+    - bismark_bwt2_e2e
+    - bismark_his2
+    - bsseeker2_bwt
+    - bsseeker2_soap2
+    - bsseeker2_bwt2_e2e
+    - bsseeker2_bwt2_local
+  threads: 8
+
+# Aligner-specific parameters
+aligner_params:
+  bwameth:
+    extra_args: ""
+  bsbolt:
+    extra_args: ""
+  bsmap:
+    extra_args: "-w 100"
+  walt:
+    extra_args: ""
+  abismal:
+    extra_args: ""
+  batmeth2:
+    extra_args: ""
+  basal:
+    extra_args: ""
+  hisat3n:
+    extra_args: ""
+  hisat3n_repeat:
+    extra_args: ""
+  bismark_bwt2_e2e:
+    extra_args: "--non_directional"
+  bismark_his2:
+    extra_args: "--non_directional"
+  bsseeker2_bwt:
+    extra_args: ""
+  bsseeker2_soap2:
+    extra_args: ""
+  bsseeker2_bwt2_e2e:
+    extra_args: ""
+  bsseeker2_bwt2_local:
+    extra_args: ""
+
+# QC settings
+qc:
+  enabled: false
+  max_reads: 50000
+
+# Adapter trimming settings
+adapter:
+  enabled: false
+  auto_detect: true
+  r1_3prime: "AGATCGGAAGAGC"          # Illumina universal adapter
+  r2_3prime: "AGATCGGAAGAGC"
+  r1_5prime: null
+  r2_5prime: null
+  use_cutadapt: true                   # Use cutadapt if available
+  min_overlap: 6
+
+# UMI (Unique Molecular Identifier) settings
+umi:
+  enabled: false
+  location: "header"                   # header, inline_5prime, inline_3prime
+  length: 0                            # 0 = auto-detect
+  pattern: null                        # Custom regex pattern
+  strategy: "cluster"                  # cluster, consensus
+  dedup: true
+
+# Error correction
+correction:
+  enabled: false
+  strategies: ["mq", "clip", "consensus"]
+  min_mq: 20
+  max_clip_pct: 50
+  max_unconverted: 3
+  min_depth: 5
+  min_agree_ratio: 0.7
+  read_length: 150                  # used by AlgorithmSelector:
+                                    #   <80 â†?simple, 80-149 â†?context(flank=1),
+                                    #   150-499 â†?context(flank=2), >=500 â†?haplotype
+  motifs: []                        # user-defined IUPAC motifs (e.g. ["CG", "AAA"])
+  auto_detect_motifs: true          # detect motifs from data if motifs list is empty
+  motif_flank:                      # auto (null) â†?set by AlgorithmSelector per read_length
+  prior_strength:                   # auto (null) â†?set by AlgorithmSelector per read_length
+  model_threshold: 0.5              # error probability threshold for model-based rejection
+
+# Evaluation settings
+evaluation:
+  min_coverage: 5
+  min_qual: 20
+
+# Threading
+threads: 8

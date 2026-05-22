@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+*.md
+test_results
+batch_demo_results
+demo_results
+qc_test
+qc_test2
+*.zip
+output/
+input/
+reference/
+.DS_Store
+Thumbs.db

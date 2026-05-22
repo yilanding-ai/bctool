@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  bctool:
+    image: bctool:latest
+    container_name: bctool
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data/input:/data/input
+      - ./data/output:/data/output
+      - ./data/reference:/data/reference
+    working_dir: /data
+    entrypoint: ["conda", "run", "--no-capture-output", "-n", "bctool"]
+    command: ["bctool", "--help"]
+
+  shell:
+    image: bctool:latest
+    container_name: bctool-shell
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data/input:/data/input
+      - ./data/output:/data/output
+      - ./data/reference:/data/reference
+    working_dir: /data
+    stdin_open: true
+    tty: true
+    entrypoint: ["conda", "run", "--no-capture-output", "-n", "bctool", "/bin/bash"]
+
+  demo:
+    image: bctool:latest
+    container_name: bctool-demo
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data/output:/data/output
+    working_dir: /data
+    entrypoint: ["conda", "run", "--no-capture-output", "-n", "bctool"]
+    command: ["bctool", "demo", "-o", "/data/output/demo"]
