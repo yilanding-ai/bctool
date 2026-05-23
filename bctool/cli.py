@@ -298,6 +298,31 @@ def batch_demo(output, samples, workers):
 
 
 @main.command()
+@click.argument("sam")
+@click.option("--conversion", type=click.Choice(CONV_CHOICES), default="ct",
+              help="Conversion type")
+@click.option("-o", "--output", default="./perbase_methylation.csv",
+              help="Output CSV path")
+@click.option("--min-qual", type=int, default=0,
+              help="Minimum base quality score (Phred)")
+def perbase(sam, conversion, output, min_qual):
+    """Extract per-position conversion data from SAM to CSV.
+
+    Output columns: ref, pos, strand, convertedBaseQualities,
+    convertedBaseCount, unconvertedBaseQualities, unconvertedBaseCount, 未转化率
+    """
+    from .methylation.perbase_caller import PerBaseCaller
+    from .methylation.converter import ConversionType
+
+    conv = ConversionType(conversion)
+    caller = PerBaseCaller(conv, min_qual=min_qual)
+    click.echo(f"Parsing {sam}...")
+    sites = caller.parse_sam(sam)
+    caller.to_csv(sites, output)
+    click.echo(f"Per-base methylation CSV written to {output}")
+
+
+@main.command()
 @click.option("--port", default=8501, help="Web server port")
 @click.option("--host", default="0.0.0.0", help="Web server host")
 def web(port, host):

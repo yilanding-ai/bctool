@@ -39,7 +39,13 @@ class MethylationCaller:
                     continue
 
                 # Parse CIGAR to get aligned positions
-                aligned_positions = self._cigar_to_positions(pos, cigar, len(seq))
+                aligned_positions = self._cigar_to_positions(pos, cigar, seq)
+
+                target = self.conversion.target_base
+                conv = self.conversion.converted_base
+                comp_target = self.conversion.complement_target
+                comp_conv = self.conversion.complement_converted
+                strand = "-" if flag & 0x10 else "+"
 
                 for read_idx, (ref_pos, read_base) in enumerate(aligned_positions):
                     if read_idx >= len(qual):
@@ -49,21 +55,16 @@ class MethylationCaller:
                     if ref_pos < 0:
                         continue
 
-                    target = self.conversion.target_base
-                    conv = self.conversion.converted_base
-                    comp_target = self.conversion.complement_target
-                    comp_conv = self.conversion.complement_converted
-
-                    if read_base == target:
-                        sites[(chrom, ref_pos)]["unmeth"] += 1
-                    elif read_base == conv:
-                        sites[(chrom, ref_pos)]["meth"] += 1
-                    # Also check complement strand
-                    rc_base = self._rc(read_base)
-                    if rc_base == comp_target:
-                        sites[(chrom, ref_pos)]["unmeth"] += 1
-                    elif rc_base == comp_conv:
-                        sites[(chrom, ref_pos)]["meth"] += 1
+                    if strand == "+":
+                        if read_base == target:
+                            sites[(chrom, ref_pos)]["unmeth"] += 1
+                        elif read_base == conv:
+                            sites[(chrom, ref_pos)]["meth"] += 1
+                    else:
+                        if read_base == comp_target:
+                            sites[(chrom, ref_pos)]["unmeth"] += 1
+                        elif read_base == comp_conv:
+                            sites[(chrom, ref_pos)]["meth"] += 1
 
         return sites
 
@@ -78,40 +79,25 @@ class MethylationCaller:
         return output_path
 
     @staticmethod
-    def _cigar_to_positions(pos, cigar, seq_len):
+    def _cigar_to_positions(pos, cigar, seq):
         ops = re.findall(r'(\d+)([MIDNSHP=X])', cigar)
         ref_pos = pos
         read_pos = 0
         result = []
+        seq_len = len(seq)
 
         for length, op in ops:
             length = int(length)
-            if op == "M":
+            if op in ("M", "=", "X"):
                 for i in range(length):
                     if read_pos < seq_len:
                         result.append((ref_pos, seq[read_pos]))
                         ref_pos += 1
                         read_pos += 1
-            elif op == "D":
+            elif op in ("D", "N"):
                 ref_pos += length
-            elif op == "I":
+            elif op in ("I", "S"):
                 read_pos += length
-            elif op == "S":
-                read_pos += length
-            elif op == "N":
-                ref_pos += length
-            elif op == "=":
-                for i in range(length):
-                    if read_pos < seq_len:
-                        result.append((ref_pos, seq[read_pos]))
-                        ref_pos += 1
-                        read_pos += 1
-            elif op == "X":
-                for i in range(length):
-                    if read_pos < seq_len:
-                        result.append((ref_pos, seq[read_pos]))
-                        ref_pos += 1
-                        read_pos += 1
         return result
 
     @staticmethod
