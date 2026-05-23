@@ -241,23 +241,6 @@ def demo(output, conversion):
 
 
 @main.command()
-@click.option("-o", "--output", default="./demo_results")
-@click.option("--conversion", type=click.Choice(CONV_CHOICES), default="ct")
-def demo(output, conversion):
-    """Run a quick demo without any external dependencies."""
-    click.echo("Starting BCTool demo (no external tools required)...")
-    cfg = Config()
-    cfg.data["output_dir"] = output
-    cfg.data["conversion"] = conversion
-    cfg.data["simulation"]["num_reads"] = 10000
-    cfg.data["simulation"]["genome_length"] = 200000
-    cfg.data["extraction"]["enabled"] = False
-    cfg.data["aligners"]["enabled"] = []
-    pipe = Pipeline(cfg)
-    pipe.run()
-
-
-@main.command()
 @click.option("-o", "--output", default="./batch_demo_results")
 @click.option("--samples", type=int, default=4,
               help="Number of simulated samples")

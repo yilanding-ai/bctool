@@ -46,31 +46,34 @@ class PerBaseCaller:
                 for read_idx, (ref_pos, read_base) in enumerate(aligned_positions):
                     if read_idx >= len(qual):
                         continue
-                    qscore = ord(qual[read_idx]) - 33
-                    if qscore < self.min_qual:
+                    if ord(qual[read_idx]) - 33 < self.min_qual:
                         continue
                     if ref_pos < 0:
                         continue
 
                     key = (chrom, ref_pos + 1)
+                    qchar = qual[read_idx]
 
                     if strand == "+":
                         if read_base == target:
-                            sites[key][strand]["unconv_quals"].append(str(qscore))
+                            sites[key][strand]["unconv_quals"].append(qchar)
                         elif read_base == conv:
-                            sites[key][strand]["conv_quals"].append(str(qscore))
+                            sites[key][strand]["conv_quals"].append(qchar)
                     else:
                         if read_base == comp_target:
-                            sites[key][strand]["unconv_quals"].append(str(qscore))
+                            sites[key][strand]["unconv_quals"].append(qchar)
                         elif read_base == comp_conv:
-                            sites[key][strand]["conv_quals"].append(str(qscore))
+                            sites[key][strand]["conv_quals"].append(qchar)
 
         return sites
 
     def to_csv(self, sites, output_path):
-        with open(output_path, "w") as f:
-            f.write("ref,pos,strand,convertedBaseQualities,convertedBaseCount,"
-                    "unconvertedBaseQualities,unconvertedBaseCount,未转化率\n")
+        import csv
+        with open(output_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["ref", "pos", "strand", "convertedBaseQualities",
+                             "convertedBaseCount", "unconvertedBaseQualities",
+                             "unconvertedBaseCount", "未转化率"])
             for (chrom, pos), strands in sorted(sites.items()):
                 for strand in ["+", "-"]:
                     data = strands[strand]
@@ -82,8 +85,8 @@ class PerBaseCaller:
                     unconv_count = len(data["unconv_quals"])
                     total = conv_count + unconv_count
                     unconv_rate = unconv_count / total if total > 0 else 0.0
-                    f.write(f"{chrom},{pos},{strand},{conv_quals},{conv_count},"
-                            f"{unconv_quals},{unconv_count},{unconv_rate:.6f}\n")
+                    writer.writerow([chrom, pos, strand, conv_quals, conv_count,
+                                     unconv_quals, unconv_count, f"{unconv_rate:.6f}"])
         return output_path
 
     @staticmethod
