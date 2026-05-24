@@ -39,7 +39,7 @@ def encode_2bit(seq):
 def decode_2bit(packed, length):
     chars = []
     for i in range(length):
-        code = (packed[i // 32] >> (2 * (i % 32))) & 0b11
+        code = (int(packed[i // 32]) >> (2 * (i % 32))) & 0b11
         chars.append(_DECODE_2BIT.get(code, "N"))
     return "".join(chars)
 
