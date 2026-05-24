@@ -31,7 +31,8 @@ def encode_2bit(seq):
     packed = np.zeros(words, dtype=np.uint64)
     for i, base in enumerate(seq):
         code = _ENCODE_2BIT.get(base.upper(), 0b00)
-        packed[i // 32] |= np.uint64(code) << (2 * (i % 32))
+        idx = i // 32
+        packed[idx] = int(packed[idx]) | (code << (2 * (i % 32)))
     return packed
 
 
